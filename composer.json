@@ -1,17 +1,22 @@
 {
-    "name": "radialapps/roundcube-oidc",
+    "name": "cymdeveloppement/roundcube-new-oidc",
     "type": "roundcube-plugin",
-    "description": "OpenID Connect 1.0 login plugin for roundcube",
+    "description": "OpenID Connect login plugin for Roundcube with OIDC logout and auto-redirect support",
     "license": "MIT",
-    "version": "1.2.13",
     "authors": [
         {
             "name": "Varun Patil",
             "email": "radialapps@gmail.com",
-            "role": "Lead"
+            "role": "Original Author"
+        },
+        {
+            "name": "CymDeveloppement",
+            "role": "Maintainer"
         }
     ],
+    "homepage": "https://github.com/CymDeveloppement/roundcube-new-oidc",
     "require": {
+        "php": ">=8.0",
         "roundcube/plugin-installer": ">=0.1.6",
         "jumbojett/openid-connect-php": "^0.9.2"
     }
