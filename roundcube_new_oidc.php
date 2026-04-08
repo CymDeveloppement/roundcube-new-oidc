@@ -14,7 +14,7 @@ use Jumbojett\OpenIDConnectClient;
      * @author Varun Patil
      * @category  Plugin for RoundCube WebMail
      */
-    class roundcube_oidc extends rcube_plugin
+    class roundcube_new_oidc extends rcube_plugin
     {
         public $task = 'login|logout';
         private $map;
