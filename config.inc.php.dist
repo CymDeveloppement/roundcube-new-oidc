@@ -51,3 +51,7 @@ $config['oidc_logout_url'] = '';
 // Redirection automatique vers OIDC sans afficher la page de login
 $config['oidc_auto_redirect'] = false;
 
+// Vérifie la validité de la session OIDC à chaque chargement de page
+// Si le token est révoqué côté provider, l'utilisateur est déconnecté
+$config['oidc_session_check'] = false;
+

@@ -16,7 +16,7 @@ use Jumbojett\OpenIDConnectClient;
      */
     class roundcube_new_oidc extends rcube_plugin
     {
-        public $task = 'login|logout';
+        public $task = '*';
         private $map;
 
         function init() {
@@ -24,6 +24,55 @@ use Jumbojett\OpenIDConnectClient;
             $this->load_config('config.inc.php');
             $this->add_hook('template_object_loginform', array($this, 'loginform'));
             $this->add_hook('logout_after', array($this, 'oidc_logout'));
+
+            // Check OIDC session on each page load
+            if ($RCMAIL = rcmail::get_instance()) {
+                if ($RCMAIL->task != 'login' && $RCMAIL->task != 'logout' && $RCMAIL->user && $RCMAIL->user->ID) {
+                    $this->check_oidc_session();
+                }
+            }
+        }
+
+        function check_oidc_session() {
+            $rcmail = rcmail::get_instance();
+            if (!$rcmail->config->get('oidc_session_check', false)) {
+                return;
+            }
+
+            $access_token = $_SESSION['oidc_access_token'] ?? null;
+            if (empty($access_token)) {
+                return;
+            }
+
+            // Verify token against userinfo endpoint
+            $oidc_url = rtrim($rcmail->config->get('oidc_url'), '/');
+            $ch = curl_init($oidc_url . '/.well-known/openid-configuration');
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+            $config = json_decode(curl_exec($ch), true);
+            curl_close($ch);
+
+            $userinfo_endpoint = $config['userinfo_endpoint'] ?? null;
+            if (empty($userinfo_endpoint)) {
+                return;
+            }
+
+            $ch = curl_init($userinfo_endpoint);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 5,
+                CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $access_token],
+            ]);
+            $result = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($http_code === 401 || $http_code === 403) {
+                $rcmail->logout_actions();
+                $rcmail->kill_session();
+                $logout_url = $rcmail->config->get('oidc_logout_url', '');
+                header('Location: ' . (!empty($logout_url) ? $logout_url : './'));
+                exit;
+            }
         }
 
         function oidc_logout($args) {
@@ -113,8 +162,12 @@ use Jumbojett\OpenIDConnectClient;
                 'valid'       => true,
             ));
 
+            // Store access token for session checking
+            $access_token = $oidc->getAccessToken();
+
             // Login to IMAP
             if ($RCMAIL->login($auth['user'], $password, $imap_server, $auth['cookiecheck'])) {
+                $_SESSION['oidc_access_token'] = $access_token;
                 $RCMAIL->session->remove('temp');
                 $RCMAIL->session->regenerate_id(false);
                 $RCMAIL->session->set_auth_cookie();
