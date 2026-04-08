@@ -44,3 +44,10 @@ $config['oidc_field_server'] = 'imap_server';
 // Any errors will be reported as $ERROR
 $config['oidc_login_page'] = '';
 
+// -------------- Logout & Redirect -----------------
+// URL de déconnexion du provider OIDC (Single Logout)
+$config['oidc_logout_url'] = '';
+
+// Redirection automatique vers OIDC sans afficher la page de login
+$config['oidc_auto_redirect'] = false;
+

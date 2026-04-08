@@ -23,6 +23,17 @@ use Jumbojett\OpenIDConnectClient;
             $this->load_config('config.inc.php.dist');
             $this->load_config('config.inc.php');
             $this->add_hook('template_object_loginform', array($this, 'loginform'));
+            $this->add_hook('logout_after', array($this, 'oidc_logout'));
+        }
+
+        function oidc_logout($args) {
+            $rcmail = rcmail::get_instance();
+            $logout_url = $rcmail->config->get('oidc_logout_url', '');
+            if (!empty($logout_url)) {
+                header('Location: ' . $logout_url);
+                exit;
+            }
+            return $args;
         }
 
         function altReturn($ERROR) {
@@ -45,6 +56,11 @@ use Jumbojett\OpenIDConnectClient;
 
             // Check if we are starting or resuming oidc auth
             if (!isset($_GET['code']) && !isset($_GET['oidc'])) {
+                $RCMAIL = rcmail::get_instance();
+                if ($RCMAIL->config->get('oidc_auto_redirect', false)) {
+                    header('Location: ?oidc=1');
+                    exit;
+                }
                 $this->altReturn(null);
                 return $content;
             }
