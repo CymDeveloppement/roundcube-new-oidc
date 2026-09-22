@@ -17,7 +17,9 @@ use Jumbojett\OpenIDConnectClient;
      */
     class roundcube_new_oidc extends rcube_plugin
     {
-        public $task = '*';
+        // Empty means the plugin is loaded for every Roundcube task.
+        // A literal * breaks Roundcube task-filter regex construction.
+        public $task = '';
 
         function init() {
             $this->load_config('config.inc.php.dist');

@@ -1,7 +1,7 @@
 {
     "name": "cymdeveloppement/roundcube-new-oidc",
     "type": "roundcube-plugin",
-    "description": "OpenID Connect login plugin for Roundcube with OIDC logout and auto-redirect support",
+    "description": "OpenID Connect login plugin for Roundcube with SSO logout, auto-redirect and session renewal",
     "license": "MIT",
     "authors": [
         {
