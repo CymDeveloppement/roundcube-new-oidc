@@ -1,6 +1,8 @@
 # Roundcube New OIDC
 
-Fork of [roundcube-oidc](https://github.com/pulsejet/roundcube-oidc) with OIDC logout and auto-redirect support.
+Maintained by Yann Challet ([CymDeveloppement](https://github.com/CymDeveloppement)).
+
+Fork of [roundcube-oidc](https://github.com/pulsejet/roundcube-oidc) with OIDC logout, auto-redirect and session renewal support.
 
 This plugin allows you to authenticate users to Roundcube using an OpenID Connect 1.0 provider. There are three modes to run the plugin in:
 1. **Cleartext Password**: The OIDC provider must supply the user's password in cleartext, which is then used to login to the IMAP server
@@ -15,7 +17,7 @@ composer require cymdeveloppement/roundcube-new-oidc
 
 Then copy and edit the configuration file:
 ```bash
-cp plugins/roundcube_oidc/config.inc.php.dist plugins/roundcube_oidc/config.inc.php
+cp plugins/roundcube_new_oidc/config.inc.php.dist plugins/roundcube_new_oidc/config.inc.php
 ```
 
 ## Configuration
@@ -50,13 +52,21 @@ cp plugins/roundcube_oidc/config.inc.php.dist plugins/roundcube_oidc/config.inc.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `oidc_login_page` | string | `''` | Path to an alternative login page. Errors are available as `$ERROR` |
-| `oidc_auto_redirect` | bool | `false` | Automatically redirect to OIDC provider, bypassing the login page |
+| `oidc_auto_redirect` | bool | `false` | Automatically redirect to OIDC provider, bypassing the login page (except right after logout) |
 
 ### Logout
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `oidc_logout_url` | string | `''` | OIDC provider logout URL for Single Logout support |
+
+### Session
+
+While Roundcube is in use, the plugin renews the OIDC refresh token before it expires, which keeps the provider session alive (e.g. Keycloak *SSO Session Idle*).
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `oidc_session_check` | bool | `false` | Log the user out of Roundcube when the provider rejects the token renewal (session expired or revoked) |
 
 Example for Keycloak:
 ```php
@@ -72,6 +82,10 @@ Unless cleartext passwords are provided, SMTP must be configured to use no authe
 - Roundcube 1.6+
 - PHP 8.0+
 - Tested with Keycloak 25+ as OIDC provider
+
+## Credits
+
+Based on [roundcube-oidc](https://github.com/pulsejet/roundcube-oidc) by Varun Patil.
 
 ## License
 

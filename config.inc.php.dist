@@ -51,7 +51,9 @@ $config['oidc_logout_url'] = '';
 // Redirection automatique vers OIDC sans afficher la page de login
 $config['oidc_auto_redirect'] = false;
 
-// Vérifie la validité de la session OIDC à chaque chargement de page
-// Si le token est révoqué côté provider, l'utilisateur est déconnecté
+// La session OIDC est maintenue active en renouvelant le refresh token
+// pendant l'utilisation de Roundcube.
+// Si activé, l'utilisateur est déconnecté de Roundcube lorsque le provider
+// refuse le renouvellement (session expirée ou révoquée côté provider)
 $config['oidc_session_check'] = false;
 

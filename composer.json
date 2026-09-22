@@ -10,7 +10,13 @@
             "role": "Original Author"
         },
         {
+            "name": "Yann Challet",
+            "homepage": "https://github.com/CymDeveloppement",
+            "role": "Maintainer"
+        },
+        {
             "name": "CymDeveloppement",
+            "homepage": "https://github.com/CymDeveloppement",
             "role": "Maintainer"
         }
     ],
