@@ -64,9 +64,11 @@ cp plugins/roundcube_new_oidc/config.inc.php.dist plugins/roundcube_new_oidc/con
 
 While Roundcube is in use, the plugin renews the OIDC refresh token before it expires, which keeps the provider session alive (e.g. Keycloak *SSO Session Idle*).
 
+When the IMAP password comes from a provider claim (`oidc_field_password`), the plugin reads it again on each renewal and updates the Roundcube session if it has changed, so a password change does not log the user out.
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `oidc_session_check` | bool | `false` | Log the user out of Roundcube when the provider rejects the token renewal (session expired or revoked) |
+| `oidc_session_check` | bool | `false` | Log the user out of Roundcube when the provider rejects the token renewal (session expired or revoked), or when the IMAP server rejects the session credentials (e.g. password changed). In the IMAP case, the password claim is read again first; if it still fails, the OIDC login is started again to get up-to-date credentials |
 
 Example for Keycloak:
 ```php

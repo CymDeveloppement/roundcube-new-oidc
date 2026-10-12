@@ -53,7 +53,12 @@ $config['oidc_auto_redirect'] = false;
 
 // La session OIDC est maintenue active en renouvelant le refresh token
 // pendant l'utilisation de Roundcube.
+// Si le mot de passe IMAP est fourni par un claim (oidc_field_password),
+// il est relu à chaque renouvellement et mis à jour en session s'il a changé.
 // Si activé, l'utilisateur est déconnecté de Roundcube lorsque le provider
 // refuse le renouvellement (session expirée ou révoquée côté provider)
+// ou lorsque le serveur IMAP refuse les identifiants de la session
+// (ex. mot de passe changé) et que le claim du provider ne fournit pas
+// de mot de passe valide ; la connexion OIDC est alors relancée
 $config['oidc_session_check'] = false;
 

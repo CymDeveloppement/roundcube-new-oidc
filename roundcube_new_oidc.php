@@ -28,6 +28,7 @@ use Jumbojett\OpenIDConnectClient;
             $this->add_hook('logout_after', array($this, 'oidc_logout'));
             // Runs on every authenticated request, including refresh/keep-alive
             $this->add_hook('ready', array($this, 'oidc_keep_alive'));
+            $this->add_hook('ready', array($this, 'oidc_imap_check'));
         }
 
         /**
@@ -91,10 +92,21 @@ use Jumbojett\OpenIDConnectClient;
                 return $args;
             }
 
-            $rcmail = rcmail::get_instance();
-            $refresh_token = $rcmail->decrypt($state['refresh_token']);
+            $this->oidc_refresh(rcmail::get_instance());
+
+            return $args;
+        }
+
+        /**
+         * Renew the OIDC token, then update the IMAP password from the
+         * provider claim if it has changed.
+         * Returns true when the IMAP password stored in the session changed.
+         */
+        private function oidc_refresh($rcmail) {
+            $state = $_SESSION['roundcube_new_oidc_token'] ?? null;
+            $refresh_token = !empty($state['refresh_token']) ? $rcmail->decrypt($state['refresh_token']) : null;
             if (empty($refresh_token)) {
-                return $args;
+                return false;
             }
 
             try {
@@ -106,7 +118,7 @@ use Jumbojett\OpenIDConnectClient;
                         ? $response->refresh_token
                         : $refresh_token;
                     $this->save_oidc_token($rcmail, $new_refresh_token, $response);
-                    return $args;
+                    return $this->sync_password($rcmail, $oidc);
                 }
 
                 // Session expired or revoked on the provider side
@@ -115,7 +127,7 @@ use Jumbojett\OpenIDConnectClient;
                     if ($rcmail->config->get('oidc_session_check', false)) {
                         $this->oidc_session_expired($rcmail);
                     }
-                    return $args;
+                    return false;
                 }
 
                 throw new RuntimeException('OIDC provider returned no access token'
@@ -126,17 +138,95 @@ use Jumbojett\OpenIDConnectClient;
                 rcmail::write_log('errors', 'OIDC token refresh failed: ' . $e->getMessage());
             }
 
+            return false;
+        }
+
+        /**
+         * Update the IMAP password stored in the session when the provider
+         * supplies it in a claim (cleartext password mode) and it has changed.
+         * Returns true when the password was updated.
+         */
+        private function sync_password($rcmail, $oidc) {
+            if (empty($_SESSION['roundcube_new_oidc_password_claim'])) {
+                return false;
+            }
+
+            try {
+                $user = json_decode(json_encode($oidc->requestUserInfo()), true);
+            } catch (Throwable $e) {
+                rcmail::write_log('errors', 'OIDC userinfo request failed: ' . $e->getMessage());
+                return false;
+            }
+
+            $password = $user[$rcmail->config->get('oidc_field_password')] ?? null;
+            if (empty($password) || !is_string($password)
+                || $password === $rcmail->decrypt($_SESSION['password'])) {
+                return false;
+            }
+
+            $_SESSION['password'] = $rcmail->encrypt($password);
+
+            // The storage may already be initialized with the old password
+            $storage = $rcmail->get_storage();
+            if (!$storage->is_connected()) {
+                $storage->set_options(array('password' => $password));
+            }
+
+            return true;
+        }
+
+        /**
+         * When the IMAP server rejects the credentials stored in the session
+         * (e.g. password changed), try the current password from the provider
+         * claim first. If it still fails, log the user out and restart the
+         * OIDC login to get up-to-date credentials.
+         * Network errors are ignored so a temporary outage keeps the session.
+         */
+        public function oidc_imap_check($args) {
+            if (empty($_SESSION['roundcube_new_oidc_login']) || empty($_SESSION['storage_host'])) {
+                return $args;
+            }
+
+            // Only mail requests and the periodic refresh need the IMAP server
+            if ($args['task'] != 'mail' && $args['action'] != 'refresh') {
+                return $args;
+            }
+
+            $rcmail = rcmail::get_instance();
+            if (!$rcmail->config->get('oidc_session_check', false)) {
+                return $args;
+            }
+
+            $storage = $rcmail->get_storage();
+            if (!($storage instanceof rcube_imap) || $storage->check_connection()) {
+                return $args;
+            }
+
+            // RFC 5530 response codes for rejected credentials
+            $auth_errors = array('AUTHENTICATIONFAILED', 'AUTHORIZATIONFAILED', 'EXPIRED');
+            if (in_array($storage->conn->resultcode, $auth_errors)) {
+                if ($this->oidc_refresh($rcmail) && $rcmail->storage_connect()) {
+                    return $args;
+                }
+
+                rcmail::write_log('errors', 'IMAP credentials rejected for ' . $_SESSION['username']
+                    . ', closing the Roundcube session');
+                $this->oidc_session_expired($rcmail, './?oidc=1');
+            }
+
             return $args;
         }
 
         /**
          * Log the user out of Roundcube after the OIDC session has ended.
          */
-        private function oidc_session_expired($rcmail) {
+        private function oidc_session_expired($rcmail, $url = null) {
             $rcmail->logout_actions();
             $rcmail->kill_session();
 
-            $url = $rcmail->url(array('_task' => 'login', '_err' => 'session'));
+            if (empty($url)) {
+                $url = $rcmail->url(array('_task' => 'login', '_err' => 'session'));
+            }
 
             // Same handling as Roundcube for an invalid session in AJAX requests
             if ($rcmail->output->ajax_call || $rcmail->output->get_env('framed')) {
@@ -219,6 +309,7 @@ use Jumbojett\OpenIDConnectClient;
 
             // Parse fields
             $uid = $user[$RCMAIL->config->get('oidc_field_uid')] ?? null;
+            $password_claim = !empty($user[$RCMAIL->config->get('oidc_field_password')]);
             $password = $user[$RCMAIL->config->get('oidc_field_password')] ?? $password;
             $imap_server = $user[$RCMAIL->config->get('oidc_field_server')] ?? $imap_server;
 
@@ -251,6 +342,9 @@ use Jumbojett\OpenIDConnectClient;
             ) {
                 $RCMAIL->session->remove('temp');
                 $RCMAIL->session->regenerate_id(false);
+                $_SESSION['roundcube_new_oidc_login'] = true;
+                // The IMAP password comes from the provider and can be synced
+                $_SESSION['roundcube_new_oidc_password_claim'] = $password_claim;
                 // Keep the refresh token for the authenticated Roundcube session
                 $this->save_oidc_token($RCMAIL, $oidc->getRefreshToken(), $oidc->getTokenResponse());
                 $RCMAIL->session->set_auth_cookie();
